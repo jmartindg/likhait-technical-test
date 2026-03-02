@@ -1,12 +1,9 @@
-/**
- * Form component for adding/editing expenses
- */
-
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ExpenseFormData } from "../types";
 import { EXPENSE_CATEGORIES } from "../constants/categories";
-import { TextField, SelectBox, Button } from "../vibes";
+import { TextField, SelectBox, Button, Modal } from "../vibes";
 import { useExpenseForm } from "../hooks/useExpenseForm";
+import { createCategory, fetchCategories } from "../services/api";
 
 interface ExpenseFormProps {
   initialData?: Partial<ExpenseFormData>;
@@ -15,17 +12,15 @@ interface ExpenseFormProps {
   submitLabel?: string;
 }
 
-export function ExpenseForm({
-  initialData,
-  onSubmit,
-  onCancel,
-  submitLabel = "Add Expense",
-}: ExpenseFormProps) {
-  const { formData, errors, isSubmitting, handleChange, handleSubmit } =
-    useExpenseForm({
-      initialData,
-      onSubmit,
-    });
+export function ExpenseForm({ initialData, onSubmit, onCancel, submitLabel = "Add Expense" }: ExpenseFormProps) {
+  const { formData, errors, isSubmitting, handleChange, handleSubmit } = useExpenseForm({
+    initialData,
+    onSubmit,
+  });
+
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryError, setNewCategoryError] = useState("");
 
   const formStyle: React.CSSProperties = {
     display: "flex",
@@ -39,10 +34,78 @@ export function ExpenseForm({
     marginTop: "0.5rem",
   };
 
-  const categoryOptions = EXPENSE_CATEGORIES.map((category) => ({
-    value: category,
-    label: category,
-  }));
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const categories = await fetchCategories();
+        if (categories && categories.length > 0) {
+          setCategoryOptions(
+            categories
+              .map((category) => ({
+                value: category.name,
+                label: category.name,
+              }))
+              .sort((a, b) => a.label.localeCompare(b.label)),
+          );
+        } else {
+          setCategoryOptions(
+            EXPENSE_CATEGORIES.map((category) => ({
+              value: category,
+              label: category,
+            })),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+        setCategoryOptions(
+          EXPENSE_CATEGORIES.map((category) => ({
+            value: category,
+            label: category,
+          })),
+        );
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  const handleOpenCategoryModal = () => {
+    setNewCategoryName("");
+    setNewCategoryError("");
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleCreateCategory = async () => {
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedName) {
+      setNewCategoryError("Category name is required");
+      return;
+    }
+
+    // Avoid duplicates in the select list
+    const exists = categoryOptions.some((option) => option.label.toLowerCase() === trimmedName.toLowerCase());
+    if (exists) {
+      setNewCategoryError("Category already exists");
+      return;
+    }
+
+    try {
+      await createCategory(trimmedName);
+
+      const updatedOptions = [...categoryOptions, { value: trimmedName, label: trimmedName }].sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+
+      setCategoryOptions(updatedOptions);
+      handleChange("category", trimmedName);
+      setIsCategoryModalOpen(false);
+    } catch (error) {
+      console.error("Failed to create category:", error);
+      setNewCategoryError("Failed to create category");
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} style={formStyle}>
@@ -69,15 +132,29 @@ export function ExpenseForm({
         required
       />
 
-      <SelectBox
-        label="Category"
-        options={categoryOptions}
-        value={formData.category}
-        onChange={(e) => handleChange("category", e.target.value)}
-        error={errors.category}
-        fullWidth
-        required
-      />
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "flex-end",
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <SelectBox
+            label="Category"
+            options={categoryOptions}
+            value={formData.category}
+            onChange={(e) => handleChange("category", e.target.value)}
+            error={errors.category}
+            fullWidth
+            required
+          />
+        </div>
+
+        <Button type="button" variant="primary" onClick={handleOpenCategoryModal}>
+          Add
+        </Button>
+      </div>
 
       <TextField
         label="Date"
@@ -90,25 +167,46 @@ export function ExpenseForm({
       />
 
       <div style={buttonGroupStyle}>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting}
-          fullWidth
-        >
+        <Button type="submit" variant="primary" disabled={isSubmitting} fullWidth>
           {isSubmitting ? "Submitting..." : submitLabel}
         </Button>
         {onCancel && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         )}
       </div>
+      <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title="Add Category">
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <TextField
+            label="Category name"
+            type="text"
+            value={newCategoryName}
+            onChange={(e) => {
+              setNewCategoryName(e.target.value);
+              if (newCategoryError) {
+                setNewCategoryError("");
+              }
+            }}
+            error={newCategoryError}
+            fullWidth
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.5rem",
+            }}
+          >
+            <Button type="button" variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" onClick={handleCreateCategory}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </form>
   );
 }
