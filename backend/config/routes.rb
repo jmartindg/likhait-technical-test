@@ -14,7 +14,7 @@ Rails.application.routes.draw do
 
   namespace :api do
     get "", to: proc { [200, {}, ['{"status":"ok"}']] }
-    resources :categories, only: [ :index ]
+    resources :categories, only: [ :index, :create ]
     resources :expenses, only: [ :index, :create, :update, :destroy ]
   end
 end
