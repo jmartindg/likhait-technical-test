@@ -13,6 +13,7 @@ Rails.application.routes.draw do
   # root "posts#index"
 
   namespace :api do
+    get "", to: proc { [200, {}, ['{"status":"ok"}']] }
     resources :categories, only: [ :index ]
     resources :expenses, only: [ :index, :create, :update, :destroy ]
   end
