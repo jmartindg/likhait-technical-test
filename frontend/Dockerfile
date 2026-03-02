@@ -1,4 +1,6 @@
-FROM node:18-alpine
+# Use Debian-based image so Rollup's native binary (glibc) installs correctly;
+# Alpine (musl) has npm optional-deps issues on ARM64.
+FROM node:18
 
 WORKDIR /app
 
